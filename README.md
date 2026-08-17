@@ -1,7 +1,7 @@
-# @neoaz07/nkxica
+# @tanvir143/ica
 
 <p align="center">
-  <strong>NKXICA - Auto-loading Instagram Chat API</strong><br>
+  <strong>ica - Auto-loading Instagram Chat API</strong><br>
   <em>Build Instagram chatbots using personal accounts with MQTT real-time messaging</em>
 </p>
 
@@ -15,106 +15,12 @@
 ## 📦 Installation
 
 ```bash
-npm install @neoaz07/nkxica
+npm install @tanvir143/ica
 ```
 
-> Requires Node.js **20.0.0+**. TypeScript declarations are bundled — `import { login, Api, Health } from '@neoaz07/nkxica'` just works.
+> Requires Node.js **20.0.0+**. TypeScript declarations are bundled — `import { login, Api, Health } from '@tanvir143/ica'` just works.
 
 ---
-
-## ✨ What's new in 1.0.4
-
-- **Session persistence** — `api.saveSession(file)` and `api.loadSessionFromFile(file)` let bots restore cookies and auth state across restarts.
-- **Auto-save session** — session state is written automatically after successful login when `autoSaveSession` is enabled.
-- **Auto reconnect** — MQTT disconnects automatically reconnect unless disabled via `autoReconnect: false`.
-- **Thread management helpers** — support pending request approval, thread mute/unmute, title updates, nicknames, and thread search.
-- **WebSocket/MQTT stability** — stronger header handling, reconnect backoff, and safer disconnect recovery.
-- **Health endpoint** for monitoring:
-  ```js
-  const h = api.getHealth();
-  // { authenticated, listening, mqtt: { connected, reconnectAttempts, ... },
-  //   http:  { msSinceLastSuccess, circuits, rateLimits }, ... }
-  ```
-- **Stricter validation** — message and media size validation occurs before upload or send.
-- **Robust cookie utilities** — `CookieUtils.parse`, `parseHeaderString`, `serialize`, and `toNetscape` cover common export formats.
-- **TypeScript declarations** shipped (`index.d.ts`).
-
----
-
-## 🚀 Quick Start
-
-```javascript
-const { login } = require('@neoaz07/nkxica');
-// For environments using a defaultRequire helper, the same export shape works:
-// const { login } = defaultRequire('@neoaz07/nkxica');
-
-// Cookie login (recommended)
-const api = await login('sessionid=...; ds_user_id=...; csrftoken=...; ig_did=...');
-
-api.listen((err, event) => {
-  if (err) return console.error(err);
-
-  if (event.type === 'message') {
-    api.sendMessage(`Echo: ${event.body}`, event.threadID);
-  }
-});
-```
-
----
-
-## 🔑 Authentication
-
-### Cookie login (recommended)
-
-Get your cookies from your browser's DevTools → Application → Cookies → instagram.com.
-The four required cookies are: `sessionid`, `ds_user_id`, `csrftoken`, `ig_did`.
-
-```javascript
-const { login } = require('@neoaz07/nkxica');
-
-// String format
-const api = await login('sessionid=...; ds_user_id=...; csrftoken=...; ig_did=...');
-
-// JSON array (export from a browser cookie extension)
-const api = await login([
-  { name: 'sessionid',  value: '...', domain: '.instagram.com', path: '/' },
-  { name: 'ds_user_id', value: '...', domain: '.instagram.com', path: '/' },
-  { name: 'csrftoken',  value: '...', domain: '.instagram.com', path: '/' },
-  { name: 'ig_did',     value: '...', domain: '.instagram.com', path: '/' }
-]);
-```
-
-### Password login
-
-```javascript
-const { login } = require('@neoaz07/nkxica');
-
-try {
-  const api = await login({ username: 'YOUR_USERNAME', password: 'YOUR_PASSWORD' });
-} catch (err) {
-  if (err.twoFactorRequired) {
-    await err.verify('YOUR_2FA_CODE');  // code from your authenticator app
-  }
-}
-```
-
----
-
-## ⚙️ Options
-
-Pass options as the second argument to `login()`:
-
-```javascript
-const api = await login(cookies, {
-  selfListen: false,      // Receive your own sent messages as events
-  listenEvents: true,     // Receive non-message events (typing, read receipts, etc.)
-  autoMarkRead: false,    // Auto-mark every incoming message as read
-  logLevel: 'info',       // 'silly' | 'debug' | 'verbose' | 'info' | 'warn' | 'error' | 'silent'
-  database: false,        // Enable SQLite message persistence
-  scheduler: false        // Enable cron-based task scheduler
-});
-```
-
 ### Available Options
 
 | Option | Type | Default | Description |
@@ -270,9 +176,8 @@ await api.initDatabase();
 ### Echo Bot
 
 ```javascript
-const { login } = require('@neoaz07/nkxica');
-
-const api = await login(process.env.IG_COOKIES, { logLevel: 'info' });
+const { login } = require('@tanvir143/ica');
+api = await login(process.env.IG_COOKIES, { logLevel: 'info' });
 const me  = api.getCurrentUserID();
 
 api.listen((err, event) => {
@@ -286,7 +191,7 @@ api.listen((err, event) => {
 ### Command Bot
 
 ```javascript
-const { login } = require('@neoaz07/nkxica');
+const { login } = require('@tanvir143/ica');
 
 const api = await login(process.env.IG_COOKIES, { logLevel: 'info', autoMarkRead: true });
 const me  = api.getCurrentUserID();
@@ -315,7 +220,7 @@ api.listen((err, event) => {
 ### Multi-Account
 
 ```javascript
-const { login } = require('@neoaz07/nkxica');
+const { login } = require('@tanvir143/ica');
 
 const [api1, api2] = await Promise.all([
   login(process.env.COOKIES_ACCOUNT_1),
@@ -329,7 +234,7 @@ api2.listen((err, event) => { /* ... */ });
 ### Advanced (custom options)
 
 ```javascript
-const { login } = require('@neoaz07/nkxica');
+const { login } = require('@tanvir143/ica');
 
 const api = await login(cookies, {
   logLevel: 'debug',
@@ -347,7 +252,7 @@ api.listen((err, event) => { /* ... */ });
 `login.CookieUtils` is available directly from the `login` import — no extra destructuring needed.
 
 ```javascript
-const { login } = require('@neoaz07/nkxica');
+const { login } = require('@tanvir143/ica');
 
 const jar = login.CookieUtils.parse('sessionid=abc; csrftoken=xyz');
 const jar = login.CookieUtils.parseJSON('[{"name":"sessionid","value":"abc","domain":".instagram.com","path":"/"}]');
@@ -361,12 +266,10 @@ After logging in, `api.CookieUtils` is also available on the api object itself.
 
 ---
 
-## 👨‍💻 Credits
+## 👨‍💻 
 
-**Owner:** Saifullah Neoaz (NeoKEX)  
-**Email:** neoaz07@gmail.com  
-**GitHub:** [@neoaz07](https://github.com/neoaz07)
-
+**Owner:** Tanvir Ahmed (tanvir143)  
+**Email:** tanvir_a19@yahoo.com
 ---
 
 ## ⚠️ Disclaimer
@@ -381,4 +284,4 @@ This is an **unofficial** Instagram API. Use at your own risk.
 
 ## 📄 License
 
-MIT © 2026 NeoKEX - Saifullah Neoaz
+MIT © 2026 tanvir143 - Tanvir Ahmed
