@@ -1,6 +1,6 @@
 {
   "name": "ica-by-tanvir",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Instagram Chat API with session persistence, MQTT real-time messaging, and bot-first utilities",
   "main": "index.js",
   "types": "index.d.ts",
