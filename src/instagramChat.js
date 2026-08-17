@@ -193,7 +193,7 @@ class InstagramChatAPI extends EventEmitter {
       }
     });
 
-  login: async function(username, password, callback) {
+  async login(username, password, callback) {
     try {
       const result = await this.auth.login(username, password);
 
