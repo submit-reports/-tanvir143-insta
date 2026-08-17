@@ -1,6 +1,6 @@
 {
-  "name": "@neoaz07/nkxica",
-  "version": "1.0.4",
+  "name": "@tanvir143/ica",
+  "version": "1.0.1",
   "description": "Instagram Chat API with session persistence, MQTT real-time messaging, and bot-first utilities",
   "main": "index.js",
   "types": "index.d.ts",
@@ -29,24 +29,24 @@
     "messenger",
     "dm",
     "unofficial",
-    "nkxica",
-    "neoaz07",
+    "tanvir143",
+    "insta-bot-tanvir",
     "instagram-chat-api",
     "instagram-bot",
     "chatbot",
     "mqtt",
     "realtime"
   ],
-  "author": "Saifullah Neoaz (NeoKEX)",
+  "author": "Tanvir Ahmed (tanvir143)",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/neoaz07/nkxica.git"
+    "url": "https://github.com/submit-reports/-tanvir-143-insta.git"
   },
   "bugs": {
-    "url": "https://github.com/neoaz07/nkxica/issues"
+    "url": "https://github.com/submit-reports/-tanvir-143-insta/issues"
   },
-  "homepage": "https://github.com/neoaz07/nkxica#readme",
+  "homepage": "https://github.com/submit-reports/-tanvir-143-insta#readme",
   "engines": {
     "node": ">=20.0.0"
   },
