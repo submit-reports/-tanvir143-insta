@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * NKXICA - Instagram Chat API
+ * NKXICA - Instagram Chat API xr
  *
  * Usage:
  *
