@@ -192,6 +192,7 @@ class InstagramChatAPI extends EventEmitter {
         }
       }
     });
+  }
 
   async login(username, password, callback) {
     try {
@@ -305,7 +306,6 @@ class InstagramChatAPI extends EventEmitter {
   // ==================== LISTENING (MQTT) ====================
 
   listen(callback) {
-    // Guard against duplicate concurrent listen() calls
     if (this.mqttConnecting) {
       const error = new Error('listen() already in progress. Wait for the current connection attempt to complete.');
       if (callback) return callback(error);
@@ -324,18 +324,14 @@ class InstagramChatAPI extends EventEmitter {
       throw error;
     }
 
-    // If a previous listener was registered, drop it before overwriting so we
-    // never accumulate stale callbacks across repeated listen() calls.
     if (this.listenerCallback && this.listenerCallback !== callback) {
       this.logger.verbose('listen(): replacing previous listener callback');
     }
 
-    // Only set active state after all validation passes
     this.listenerCallback = callback;
     this.listenActive = true;
     this.mqttConnecting = true;
 
-    // Connection timeout guard — prevents hanging indefinitely
     let timeoutHandle = setTimeout(() => {
       this.mqttConnecting = false;
       const err = new Error(`MQTT connection timed out after ${this.mqttConnectionTimeout}ms`);
@@ -380,10 +376,6 @@ class InstagramChatAPI extends EventEmitter {
     this.emit('disconnected');
   }
 
-  /**
-   * Gracefully shut down all background tasks and connections.
-   * Call this when you want to fully tear down the API instance.
-   */
   async destroy() {
     this.stopListening();
 
@@ -406,52 +398,42 @@ class InstagramChatAPI extends EventEmitter {
   handleListenEvent(event) {
     const options = getOptions();
 
-    // Deduplicate: skip events we have already processed
     if (event.messageID) {
       if (this.http.isMessageSeen(event.messageID)) return;
       this.http.markMessageSeen(event.messageID);
     }
     
-    // Check selfListen option - skip own messages if disabled
     if (event.type === 'message' && !options.selfListen) {
       const currentUserId = this.getCurrentUserID()?.userId?.toString();
       if (currentUserId && event.senderID === currentUserId) {
-        return; // Skip own messages
+        return;
       }
     }
     
-    // Check listenEvents option
     if (!options.listenEvents && event.type !== 'message') {
-      return; // Skip non-message events if listenEvents is disabled
+      return;
     }
     
-    // Auto mark as read if enabled
     if (options.autoMarkRead && event.type === 'message' && event.threadID) {
       this.markAsRead(event.threadID);
     }
     
-    // Remember message → thread mapping so reactions/unsend can resolve the thread
     if (event.messageID && event.threadID) {
       this.http.rememberMessageThread(event.messageID, event.threadID);
     }
 
-    // Also map the replied-to message ID → thread so that commands like
-    // !react and !unsend can resolve the thread when acting on a reply target
     if (event.replyTo && event.threadID) {
       this.http.rememberMessageThread(event.replyTo, event.threadID);
     }
 
-    // Save to database if available
     if (this.db && event.type === 'message') {
       this.db.saveMessage(event);
     }
     
-    // Call listener callback
     if (this.listenerCallback) {
       this.listenerCallback(null, event);
     }
     
-    // Emit event
     this.emit('event', event);
     if (event.type) {
       this.emit(event.type, event);
@@ -459,11 +441,6 @@ class InstagramChatAPI extends EventEmitter {
   }
 
   // ==================== MESSAGING METHODS ====================
-
-  // NOTE: this.sendMessage is the SendMessage instance (set in constructor).
-  // A sendMessage(message, threadID) proxy is intentionally absent here because
-  // it would be shadowed by the property. Use sendMessage.toThread() directly,
-  // or call the module-level sendMessage() from index.js.
 
   sendDirectMessage(userID, message, callback) {
     return this.sendMessage.toUser(userID, message, callback);
@@ -601,7 +578,7 @@ class InstagramChatAPI extends EventEmitter {
     return this.userMethods.search(query, options, callback);
   }
 
-  // ==================== SEARCH (REELS / HASHTAGS / PLACES) ====================
+  // ==================== SEARCH ====================
 
   searchReels(query, options, callback) {
     return this.search.reels(query, options, callback);
@@ -609,12 +586,6 @@ class InstagramChatAPI extends EventEmitter {
 
   // ==================== HEALTH ====================
 
-  /**
-   * Returns a snapshot of the API's runtime health: MQTT connection state,
-   * HTTP circuit breaker state, adaptive rate-limit state, and timing of the
-   * last successful HTTP response. Use this for monitoring and to detect
-   * stale connections in long-running bots.
-   */
   getHealth() {
     const httpHealth = this.http.getHealth();
     return {
@@ -736,8 +707,6 @@ class InstagramChatAPI extends EventEmitter {
     return false;
   }
 
-  // ==================== SESSION METHODS ====================
-
   serialize() {
     return {
       ...this.auth.getSession(),
@@ -758,7 +727,6 @@ class InstagramChatAPI extends EventEmitter {
       state = JSON.parse(state);
     }
     
-    // Restore device IDs
     this.deviceId = state.deviceId || this.deviceId;
     this.phoneId = state.phoneId || this.phoneId;
     this.uuid = state.uuid || this.uuid;
@@ -766,12 +734,10 @@ class InstagramChatAPI extends EventEmitter {
     this.sessionId = state.sessionId || this.sessionId;
     this.clientSessionId = state.clientSessionId || this.clientSessionId;
     
-    // Restore user info
     this.username = state.username || this.username;
     this.userId = state.userId || this.userId;
     this.fullName = state.fullName || this.fullName;
     
-    // Normalize root-level cookies into httpSession for compatibility.
     const httpSession = state.httpSession || {
       cookies: state.cookies,
       authorization: state.authorization
@@ -781,7 +747,6 @@ class InstagramChatAPI extends EventEmitter {
       await this.http.loadSession(httpSession);
     }
 
-    // Restore user agent
     if (state.userAgent) {
       this.http.userAgent = state.userAgent;
       if (this.http.client && this.http.client.defaults) {
