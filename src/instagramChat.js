@@ -191,7 +191,7 @@ class InstagramChatAPI extends EventEmitter {
           // ignore if reconnect fails; subsequent MQTT client events will report it.
         }
       }
-    });,
+    });
 
   login: async function(username, password, callback) {
     try {
