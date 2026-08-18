@@ -142,7 +142,6 @@ async function _login(credentials, options) {
   try {
     if (isCookies) {
       const result = await client.loginWithCookies(credentials);
-      // সেফ চেক: result এক্সিস্ট করলে এবং explicitly success: false হলে তবেই এরর থ্রো করবে
       if (result && typeof result === 'object' && result.success === false) {
         const errorMsg = result.error || result.message || 'Cookie login failed';
         throw new Error(errorMsg);
@@ -160,38 +159,24 @@ async function _login(credentials, options) {
       }
     }
   } catch (err) {
-    // ফুলপ্রুফ এরর নরম্যালাইজেশন যাতে কখনো প্রপার্টি রিডিং এরর না আসে
     let errMsg = 'Unknown Error';
     try {
       if (err) {
         if (typeof err === 'string') {
           errMsg = err;
-        } else if (err.message) {
-          errMsg = err.message;
-        } else if (err.error) {
-          errMsg = err.error;
         } else {
-          errMsg = JSON.stringify(err);
+          errMsg = err.message || err.error || JSON.stringify(err);
         }
       }
-    } catch (err) {
-  let errMsg = 'Unknown Error';
-  try {
-    if (err) {
-      if (typeof err === 'string') {
-        errMsg = err;
-      } else {
-        errMsg = err.message || err.error || JSON.stringify(err);
-      }
+    } catch (e) {
+      errMsg = 'Unknown Login Error';
     }
-  } catch (e) {
-    errMsg = 'Unknown Login Error';
+
+    const finalErr = new Error(errMsg);
+    finalErr.error = errMsg;
+    throw finalErr;
   }
 
-  const finalErr = new Error(errMsg);
-  finalErr.error = errMsg;
-  throw finalErr;
-    }
   return buildApi(client);
 }
 
