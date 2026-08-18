@@ -158,9 +158,10 @@ class Auth extends EventEmitter {
 
       throw new Error('Could not verify session with cookies');
     } catch (error) {
-      log.error('Cookie login failed:', error.message);
-      if (callback) return callback(error);
-      throw error;
+  const errorMsg = error?.message || error || 'Unknown error';
+  log.error('Cookie login failed:', errorMsg);
+  if (callback) return callback(error || new Error(errorMsg));
+  throw error || new Error(errorMsg);
     }
   }
 
