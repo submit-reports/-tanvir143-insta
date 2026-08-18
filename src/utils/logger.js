@@ -1,92 +1,66 @@
 'use strict';
 
 /**
- * @fileoverview NKXICA - Idempotency / Request Deduplication
+ * @fileoverview NKXICA - Logger Utility
  * @author neoaz07 (Saifullah Neoaz)
  * @license MIT
- * @module Idempotency
- *
- * In-memory idempotency cache. Keyed by an arbitrary string (caller-supplied
- * `idempotencyKey` or auto-generated mutation token). The cached value is the
- * resolved result of the first call. Within `ttlMs`, repeat calls with the
- * same key return the cached result instead of re-running the operation.
- *
- * Designed for short-window deduplication of mutation requests (e.g. accidental
- * double-sends from a retry loop). NOT a durable store.
+ * @module Logger
  */
 
-class IdempotencyCache {
+class Logger {
   constructor(options = {}) {
-    this.ttlMs = options.ttlMs || 5 * 60 * 1000; // 5 minutes
-    this.maxSize = options.maxSize || 1000;
-    this.store = new Map(); // key -> { value, expiresAt }
-    this.inflight = new Map(); // key -> Promise (collapses concurrent calls)
+    this.level = options.level || 'info';
+    this.levels = {
+      error: 0,
+      warn: 1,
+      info: 2,
+      verbose: 3,
+      debug: 4
+    };
   }
 
-  _expire() {
-    if (this.store.size <= this.maxSize) return;
-    const now = Date.now();
-    // Drop expired entries first.
-    for (const [k, v] of this.store) {
-      if (v.expiresAt <= now) this.store.delete(k);
-      if (this.store.size <= this.maxSize) return;
-    }
-    // Still over capacity → drop oldest (insertion order).
-    while (this.store.size > this.maxSize) {
-      const oldest = this.store.keys().next().value;
-      if (oldest === undefined) break;
-      this.store.delete(oldest);
+  // রেন্ডার বা সেটঅপশন থেকে কল করার জন্য জরুরি এই মেথডটি এখানে যোগ করা হলো
+  setLevel(level) {
+    if (this.levels[level] !== undefined) {
+      this.level = level;
     }
   }
 
-  get(key) {
-    if (!key) return undefined;
-    const entry = this.store.get(key);
-    if (!entry) return undefined;
-    if (entry.expiresAt <= Date.now()) {
-      this.store.delete(key);
-      return undefined;
+  _shouldLog(level) {
+    const currentLevelWeight = this.levels[this.level] !== undefined ? this.levels[this.level] : 2;
+    const targetLevelWeight = this.levels[level] !== undefined ? this.levels[level] : 2;
+    return targetLevelWeight <= currentLevelWeight;
+  }
+
+  error(...args) {
+    if (this._shouldLog('error')) {
+      console.error(`[${new Date().toISOString()}] ❌ ERROR`, ...args);
     }
-    return entry.value;
   }
 
-  set(key, value) {
-    if (!key) return;
-    this.store.set(key, { value, expiresAt: Date.now() + this.ttlMs });
-    this._expire();
+  warn(...args) {
+    if (this._shouldLog('warn')) {
+      console.warn(`[${new Date().toISOString()}] ⚠️ WARN`, ...args);
+    }
   }
 
-  /**
-   * Run `fn` exactly once per `key` within the TTL.
-   * Concurrent calls with the same key share the same in-flight promise.
-   */
-  async run(key, fn) {
-    if (!key) return fn();
-
-    const cached = this.get(key);
-    if (cached !== undefined) return cached;
-
-    const inflight = this.inflight.get(key);
-    if (inflight) return inflight;
-
-    const promise = (async () => {
-      try {
-        const result = await fn();
-        this.set(key, result);
-        return result;
-      } finally {
-        this.inflight.delete(key);
-      }
-    })();
-
-    this.inflight.set(key, promise);
-    return promise;
+  info(...args) {
+    if (this._shouldLog('info')) {
+      console.log(`[${new Date().toISOString()}] 🔵 INFO`, ...args);
+    }
   }
 
-  clear() {
-    this.store.clear();
-    this.inflight.clear();
+  verbose(...args) {
+    if (this._shouldLog('verbose')) {
+      console.log(`[${new Date().toISOString()}] 🔍 VERBOSE`, ...args);
+    }
+  }
+
+  debug(...args) {
+    if (this._shouldLog('debug')) {
+      console.debug(`[${new Date().toISOString()}] 🐛 DEBUG`, ...args);
+    }
   }
 }
 
-module.exports = IdempotencyCache;
+module.exports = Logger;
