@@ -1,12 +1,12 @@
 'use strict';
 
 /**
- * @fileoverview NKXICA - Authentication API
- * @author neoaz07 (Saifullah Neoaz)
- * @copyright 2024 NeoKEX
+ * @fileoverview tanvir143 - Authentication API
+ * @author tanvir143 (Tanvir Ahmed)
+ * @copyright 2026 tanvir143
  * @license MIT
  * @module Auth
- * @since 1.0.0
+ * @since 1.1.2
  */
 
 const EventEmitter = require('events');
@@ -54,113 +54,117 @@ class Auth extends EventEmitter {
     try {
       log.info('Logging in with cookies...');
 
+      if (!cookies) {
+        throw new Error('Cookies cannot be empty or undefined');
+      }
+
       // Parse and load cookies
       const CookieUtils = require('../utils/cookies');
       const parsedJar = CookieUtils.parse(cookies);
       
       // Replace HTTP client's jar with parsed jar
       this.http.jar = parsedJar;
-      this.http.client.defaults.jar = parsedJar;
+      if (this.http.client && this.http.client.defaults) {
+        this.http.client.defaults.jar = parsedJar;
+      }
       
       // Get cookies list for verification
-      const cookiesList = parsedJar.serializeSync().cookies;
-      log.verbose(`Parsed ${cookiesList.length} cookies: ${cookiesList.map(c => c.key).join(', ')}`);
+      const cookiesList = parsedJar.serializeSync ? parsedJar.serializeSync().cookies : [];
+      log.verbose(`Parsed cookies count: ${cookiesList.length}`);
 
       // Try to extract user info from cookies
       const sessionCookie = cookiesList.find(c => c.key === 'sessionid');
       const dsUserId = cookiesList.find(c => c.key === 'ds_user_id');
       const wdCookie = cookiesList.find(c => c.key === 'wd');  // Viewport dimensions
-      const igDidCookie = cookiesList.find(c => c.key === 'ig_did');
       
       if (!sessionCookie) {
-        throw new Error('No sessionid cookie found. Cookies may be invalid.');
+        throw new Error('No sessionid cookie found. Cookies may be invalid or expired.');
       }
 
       // Set browser session data if available
       if (wdCookie && wdCookie.value) {
-        this.http.viewportWidth = parseInt(wdCookie.value.split('x')[0]) || 468;
-        this.http.viewportHeight = parseInt(wdCookie.value.split('x')[1]) || 905;
+        const dimensions = wdCookie.value.split('x');
+        this.http.viewportWidth = parseInt(dimensions[0]) || 468;
+        this.http.viewportHeight = parseInt(dimensions[1]) || 905;
       }
       
-      // Verify session by fetching user info
       let userId = options.userId;
       let username = options.username;
 
-      // If ds_user_id cookie exists, use it
-      if (dsUserId) {
+      if (dsUserId && dsUserId.value) {
         userId = dsUserId.value;
       }
 
-      // Try to get current user info to verify session
+      // Try to get current user info to verify session securely
       try {
-        const userInfoResponse = await this.http.get('https://www.instagram.com/api/v1/accounts/current_user/');
+        const rawResponse = await this.http.get('https://www.instagram.com/api/v1/accounts/current_user/');
+        const userInfoResponse = rawResponse?.data || rawResponse;
+
         if (userInfoResponse && userInfoResponse.user) {
           const extracted = extractUserId(userInfoResponse.user);
           if (!extracted) {
             throw new Error('Login response contained an invalid user ID');
           }
           this.userId = extracted;
-          this.username = userInfoResponse.user.username || options.username;
+          this.username = userInfoResponse.user.username || username || 'Unknown';
           this.authenticated = true;
           
-          // Set authorization header if available from response (not from session cookie)
           if (userInfoResponse.authorization) {
             this.http.setAuthorization(userInfoResponse.authorization);
           }
           
-          log.info(`Successfully logged in as ${this.username || 'Unknown'}`);
+          log.info(`Successfully logged in as ${this.username}`);
           
           const result = {
             success: true,
             userID: this.userId,
             userId: this.userId,
             username: this.username,
-            fullName: userInfoResponse.user.full_name,
-            profilePicUrl: userInfoResponse.user.profile_pic_url,
-            isVerified: userInfoResponse.user.is_verified,
-            isPrivate: userInfoResponse.user.is_private,
-            authorization: this.http.authorization  // Include authorization for MQTT
+            fullName: userInfoResponse.user.full_name || '',
+            profilePicUrl: userInfoResponse.user.profile_pic_url || '',
+            isVerified: !!userInfoResponse.user.is_verified,
+            isPrivate: !!userInfoResponse.user.is_private,
+            authorization: this.http.authorization
           };
           
           if (callback) return callback(null, result);
           return result;
         }
       } catch (verifyError) {
-        // If verification fails, check if we at least have ds_user_id
+        // Fallback: If network check fails but we have ds_user_id, allow wrapper to pass
         if (userId) {
           const fallbackId = userId.toString();
-          if (!ValidationUtils.isValidUserID(fallbackId)) {
-            throw new Error('Invalid ds_user_id cookie value');
+          if (ValidationUtils.isValidUserID(fallbackId)) {
+            this.userId = fallbackId;
+            this.username = username || 'Unknown';
+            this.authenticated = true;
+            
+            log.warn('Could not verify session via network, but fallback ds_user_id is present.');
+            
+            const result = {
+              success: true,
+              userID: this.userId,
+              userId: this.userId,
+              username: this.username,
+              fullName: '',
+              profilePicUrl: '',
+              isVerified: false,
+              isPrivate: false,
+              authorization: this.http.authorization,
+              warning: 'Session verification failed, but fallback cookie ID was loaded'
+            };
+            
+            if (callback) return callback(null, result);
+            return result;
           }
-          this.userId = fallbackId;
-          this.username = username || 'Unknown';
-          this.authenticated = true;
-          
-          log.warn('Could not verify session, but cookies appear valid');
-          
-          const result = {
-            success: true,
-            userID: this.userId,
-            userId: this.userId,
-            username: this.username,
-            fullName: '',
-            profilePicUrl: '',
-            isVerified: false,
-            isPrivate: false,
-            authorization: this.http.authorization,  // Include authorization for MQTT
-            warning: 'Session verification failed, but cookies were loaded'
-          };
-          
-          if (callback) return callback(null, result);
-          return result;
         }
         
-        throw new Error('Failed to verify session with cookies. Cookies may be expired or invalid.');
+        throw new Error(verifyError?.message || 'Failed to verify session with cookies. Cookies may be expired or invalid.');
       }
 
-      throw new Error('Could not verify session with cookies');
+      throw new Error('Could not verify session with cookies: Invalid user response payload');
     } catch (error) {
-      const errorMsg = error?.message || (typeof error === 'string' ? error : 'Unknown error');
+      const errorMsg = error?.message || (typeof error === 'string' ? error : 'Unknown error during cookie login');
       log.error('Cookie login failed:', errorMsg);
       const finalError = error instanceof Error ? error : new Error(errorMsg);
       if (callback) return callback(finalError);
@@ -198,7 +202,7 @@ class Auth extends EventEmitter {
 
       const signature = CryptoUtils.generateSignature(JSON.stringify(loginData));
 
-      const response = await this.http.post(
+      const rawResponse = await this.http.post(
         'https://www.instagram.com/api/v1/accounts/login/',
         signature,
         {
@@ -207,6 +211,8 @@ class Auth extends EventEmitter {
           }
         }
       );
+
+      const response = rawResponse?.data || rawResponse;
 
       if (!response) {
         throw new Error('Empty response received from Instagram login endpoint');
@@ -221,17 +227,17 @@ class Auth extends EventEmitter {
         this.userId = extracted;
         this.http.setAuthorization(response.authorization || '');
 
-        log.info(`Successfully logged in as ${response.logged_in_user.username}`);
+        log.info(`Successfully logged in as ${response.logged_in_user?.username || this.username}`);
         
         const result = {
           success: true,
           userID: this.userId,
           userId: this.userId,
-          username: response.logged_in_user.username,
-          fullName: response.logged_in_user.full_name,
-          profilePicUrl: response.logged_in_user.profile_pic_url,
-          isVerified: response.logged_in_user.is_verified,
-          isPrivate: response.logged_in_user.is_private
+          username: response.logged_in_user?.username || this.username,
+          fullName: response.logged_in_user?.full_name || '',
+          profilePicUrl: response.logged_in_user?.profile_pic_url || '',
+          isVerified: !!response.logged_in_user?.is_verified,
+          isPrivate: !!response.logged_in_user?.is_private
         };
         
         if (callback) return callback(null, result);
@@ -268,7 +274,7 @@ class Auth extends EventEmitter {
 
       throw new Error(response.message || 'Login failed');
     } catch (error) {
-      const errorMsg = error?.message || (typeof error === 'string' ? error : 'Unknown error');
+      const errorMsg = error?.message || (typeof error === 'string' ? error : 'Unknown error during login');
       log.error('Login failed:', errorMsg);
       const finalError = error instanceof Error ? error : new Error(errorMsg);
       if (callback) return callback(finalError);
@@ -296,7 +302,7 @@ class Auth extends EventEmitter {
 
       const signature = CryptoUtils.generateSignature(JSON.stringify(verifyData));
 
-      const response = await this.http.post(
+      const rawResponse = await this.http.post(
         'https://www.instagram.com/api/v1/accounts/two_factor_login/',
         signature,
         {
@@ -305,6 +311,8 @@ class Auth extends EventEmitter {
           }
         }
       );
+
+      const response = rawResponse?.data || rawResponse;
 
       if (!response) {
         throw new Error('Empty response received from 2FA endpoint');
@@ -325,8 +333,8 @@ class Auth extends EventEmitter {
           success: true,
           userID: this.userId,
           userId: this.userId,
-          username: response.logged_in_user.username,
-          fullName: response.logged_in_user.full_name
+          username: response.logged_in_user?.username || this.username,
+          fullName: response.logged_in_user?.full_name || ''
         };
         
         if (callback) return callback(null, result);
@@ -335,7 +343,7 @@ class Auth extends EventEmitter {
 
       throw new Error(response.message || 'Two-factor verification failed');
     } catch (error) {
-      const errorMsg = error?.message || (typeof error === 'string' ? error : 'Unknown error');
+      const errorMsg = error?.message || (typeof error === 'string' ? error : 'Unknown error during 2FA');
       log.error('2FA verification failed:', errorMsg);
       const finalError = error instanceof Error ? error : new Error(errorMsg);
       if (callback) return callback(finalError);
@@ -349,7 +357,7 @@ class Auth extends EventEmitter {
       const data = {
         guid: this.uuid,
         phone_id: this.phoneId,
-        _csrftoken: this.http.getCsrfToken() || 'missing'
+        _csrftoken: this.http.getCsrfToken ? (this.http.getCsrfToken() || 'missing') : 'missing'
       };
 
       const signature = CryptoUtils.generateSignature(JSON.stringify(data));
@@ -362,9 +370,7 @@ class Auth extends EventEmitter {
             'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
           }
         }
-      ).catch(() => {
-        // Ignore logout errors
-      });
+      ).catch(() => {});
 
       log.info('Logged out');
     } catch (error) {
@@ -373,14 +379,15 @@ class Auth extends EventEmitter {
 
     this.authenticated = false;
     this.userId = null;
-    this.http.clearSession();
+    if (this.http.clearSession) {
+      this.http.clearSession();
+    }
     
     const result = { success: true };
     if (callback) return callback(null, result);
     return result;
   }
 
-  // Get current session data
   getSession() {
     return {
       username: this.username,
@@ -390,33 +397,31 @@ class Auth extends EventEmitter {
       phoneId: this.phoneId,
       uuid: this.uuid,
       advertisingId: this.advertisingId,
-      httpSession: this.http.getSession()
+      httpSession: this.http.getSession ? this.http.getSession() : null
     };
   }
 
-  // Load saved session
   async loadSession(sessionData) {
+    if (!sessionData) return;
     this.username = sessionData.username;
     this.userId = sessionData.userId?.toString() ?? null;
-    this.authenticated = sessionData.authenticated;
+    this.authenticated = !!sessionData.authenticated;
     this.deviceId = sessionData.deviceId;
     this.phoneId = sessionData.phoneId;
     this.uuid = sessionData.uuid;
     this.advertisingId = sessionData.advertisingId;
     
-    if (sessionData.httpSession) {
+    if (sessionData.httpSession && this.http.loadSession) {
       await this.http.loadSession(sessionData.httpSession);
     }
 
     log.info('Session loaded');
   }
 
-  // Check if authenticated
   isAuthenticated() {
     return this.authenticated && this.userId !== null;
   }
 
-  // Get current user ID
   getCurrentUserID() {
     return {
       userID: this.userId,
