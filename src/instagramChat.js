@@ -266,6 +266,7 @@ class InstagramChatAPI extends EventEmitter {
     try {
       const result = await this.auth.loginWithCookies(cookies, options);
 
+      // Safe check ensuring result exists and has success property
       if (result && result.success) {
         this.logger.verbose('Initializing MQTT with userId:', result.userID);
         this._initMqtt(result.userID);
@@ -286,6 +287,13 @@ class InstagramChatAPI extends EventEmitter {
             this.logger.warn('Auto-listen failed:', err && err.message ? err.message : err);
           });
         }
+      } else {
+        // Handle case where result is returned but success is false or undefined
+        const failMsg = (result && (result.error || result.message)) ? (result.error || result.message) : 'Cookie login failed';
+        const failError = new Error(failMsg);
+        failError.error = failMsg;
+        if (callback) return callback(failError);
+        throw failError;
       }
 
       if (callback) return callback(null, result);
