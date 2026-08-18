@@ -1,5 +1,5 @@
-# @tanvir143/ica 
-
+# ica-by-tanvir
+(copy ica)
 <p align="center">
   <strong>ica - Auto-loading Instagram Chat API</strong><br>
   <em>Build Instagram chatbots using personal accounts with MQTT real-time messaging</em>
@@ -15,10 +15,10 @@
 ## 📦 Installation
 
 ```bash
-npm install @tanvir143/ica
+npm install ica-by-tanvir
 ```
 
-> Requires Node.js **20.0.0+**. TypeScript declarations are bundled — `import { login, Api, Health } from '@tanvir143/ica'` just works.
+> Requires Node.js **20.0.0+**. TypeScript declarations are bundled — `import { login, Api, Health } from 'ica-by-tanvir'` just works.
 
 ---
 ### Available Options
