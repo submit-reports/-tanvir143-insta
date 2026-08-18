@@ -155,7 +155,7 @@ class InstagramChatAPI extends EventEmitter {
     }
 
     const jarCookies = this.http.jar.serializeSync().cookies;
-    const find = (key) => jarCookies.find(c => c.key === key)?.value;
+    const find = (key) => jarCookies.find(c => c && c.key === key)?.value;
 
     this.mqtt = new InstagramMQTTClient({
       deviceId:    this.deviceId,
@@ -166,7 +166,7 @@ class InstagramChatAPI extends EventEmitter {
       sessionId:   find('sessionid'),
       csrftoken:   find('csrftoken'),
       igDid:       find('ig_did'),
-      cookies:     jarCookies.map(c => `${c.key}=${c.value}`).join('; '),
+      cookies:     jarCookies.map(c => c ? `${c.key}=${c.value}` : '').filter(Boolean).join('; '),
       userAgent:   this.http.userAgent,
       http:        this.http
     });
@@ -174,8 +174,9 @@ class InstagramChatAPI extends EventEmitter {
     // Bind handlers as instance refs so we can remove them deterministically.
     this._mqttEventHandler = (event) => this.handleListenEvent(event);
     this._mqttErrorHandler = (err) => {
-      this.logger.error('MQTT error:', err.message);
-      this.emit('error', new Error('MQTT error: ' + err.message));
+      const errMsg = (err && err.message) ? err.message : String(err);
+      this.logger.error('MQTT error:', errMsg);
+      this.emit('error', new Error('MQTT error: ' + errMsg));
     };
     this.mqtt.on('event', this._mqttEventHandler);
     this.mqtt.on('error', this._mqttErrorHandler);
@@ -198,7 +199,7 @@ class InstagramChatAPI extends EventEmitter {
     try {
       const result = await this.auth.login(username, password);
 
-      if (result.success) {
+      if (result && result.success) {
         this._initMqtt(result.userID);
 
         if (this.db) {
@@ -208,13 +209,13 @@ class InstagramChatAPI extends EventEmitter {
 
         if (this.autoSaveSession) {
           await this.saveSession(this.sessionFile).catch((err) => {
-            this.logger.warn('Auto-save session failed:', err.message);
+            this.logger.warn('Auto-save session failed:', err && err.message ? err.message : err);
           });
         }
 
         if (this.autoListen) {
           this.listen().catch((err) => {
-            this.logger.warn('Auto-listen failed:', err.message);
+            this.logger.warn('Auto-listen failed:', err && err.message ? err.message : err);
           });
         }
       }
@@ -222,8 +223,10 @@ class InstagramChatAPI extends EventEmitter {
       if (callback) return callback(null, result);
       return result;
     } catch (error) {
-      if (callback) return callback(error);
-      throw error;
+      // Safe error extraction to prevent undefined property crashes
+      const safeError = (error && typeof error === 'object') ? error : new Error(String(error));
+      if (callback) return callback(safeError);
+      throw safeError;
     }
   }
 
@@ -231,16 +234,16 @@ class InstagramChatAPI extends EventEmitter {
     try {
       const result = await this.auth.verifyTwoFactor(code, twoFactorIdentifier);
 
-      if (result.success) {
+      if (result && result.success) {
         this._initMqtt(result.userID);
         if (this.autoSaveSession) {
           await this.saveSession(this.sessionFile).catch((err) => {
-            this.logger.warn('Auto-save session failed:', err.message);
+            this.logger.warn('Auto-save session failed:', err && err.message ? err.message : err);
           });
         }
         if (this.autoListen) {
           this.listen().catch((err) => {
-            this.logger.warn('Auto-listen failed:', err.message);
+            this.logger.warn('Auto-listen failed:', err && err.message ? err.message : err);
           });
         }
       }
@@ -248,16 +251,22 @@ class InstagramChatAPI extends EventEmitter {
       if (callback) return callback(null, result);
       return result;
     } catch (error) {
-      if (callback) return callback(error);
-      throw error;
+      const safeError = (error && typeof error === 'object') ? error : new Error(String(error));
+      if (callback) return callback(safeError);
+      throw safeError;
     }
   }
 
   async loginWithCookies(cookies, options, callback) {
+    if (typeof options === 'function') {
+      callback = options;
+      options = {};
+    }
+    
     try {
       const result = await this.auth.loginWithCookies(cookies, options);
 
-      if (result.success) {
+      if (result && result.success) {
         this.logger.verbose('Initializing MQTT with userId:', result.userID);
         this._initMqtt(result.userID);
 
@@ -268,13 +277,13 @@ class InstagramChatAPI extends EventEmitter {
 
         if (this.autoSaveSession) {
           await this.saveSession(this.sessionFile).catch((err) => {
-            this.logger.warn('Auto-save session failed:', err.message);
+            this.logger.warn('Auto-save session failed:', err && err.message ? err.message : err);
           });
         }
 
         if (this.autoListen) {
           this.listen().catch((err) => {
-            this.logger.warn('Auto-listen failed:', err.message);
+            this.logger.warn('Auto-listen failed:', err && err.message ? err.message : err);
           });
         }
       }
@@ -282,8 +291,13 @@ class InstagramChatAPI extends EventEmitter {
       if (callback) return callback(null, result);
       return result;
     } catch (error) {
-      if (callback) return callback(error);
-      throw error;
+      // Safe check ensuring error object doesn't cause external 'reading error' failure
+      const errorMsg = (error && error.message) ? error.message : (error && error.error) ? error.error : String(error);
+      const safeError = new Error(errorMsg);
+      safeError.error = errorMsg;
+      
+      if (callback) return callback(safeError);
+      throw safeError;
     }
   }
 
@@ -350,8 +364,9 @@ class InstagramChatAPI extends EventEmitter {
       clearTimeout(timeoutHandle);
       this.mqttConnecting = false;
       this.listenActive = false;
-      this.logger.error('MQTT connection failed:', err.message);
-      const error = new Error('MQTT connection failed: ' + err.message);
+      const errMsg = (err && err.message) ? err.message : String(err);
+      this.logger.error('MQTT connection failed:', errMsg);
+      const error = new Error('MQTT connection failed: ' + errMsg);
       if (this.listenerCallback) this.listenerCallback(error);
       this.emit('error', error);
       throw error;
@@ -398,35 +413,36 @@ class InstagramChatAPI extends EventEmitter {
   handleListenEvent(event) {
     const options = getOptions();
 
-    if (event.messageID) {
+    if (event && event.messageID) {
       if (this.http.isMessageSeen(event.messageID)) return;
       this.http.markMessageSeen(event.messageID);
     }
     
-    if (event.type === 'message' && !options.selfListen) {
-      const currentUserId = this.getCurrentUserID()?.userId?.toString();
+    if (event && event.type === 'message' && !options.selfListen) {
+      const currentUserIDObj = this.getCurrentUserID();
+      const currentUserId = currentUserIDObj && currentUserIDObj.userId ? currentUserIDObj.userId.toString() : null;
       if (currentUserId && event.senderID === currentUserId) {
         return;
       }
     }
     
-    if (!options.listenEvents && event.type !== 'message') {
+    if (event && !options.listenEvents && event.type !== 'message') {
       return;
     }
     
-    if (options.autoMarkRead && event.type === 'message' && event.threadID) {
+    if (event && options.autoMarkRead && event.type === 'message' && event.threadID) {
       this.markAsRead(event.threadID);
     }
     
-    if (event.messageID && event.threadID) {
+    if (event && event.messageID && event.threadID) {
       this.http.rememberMessageThread(event.messageID, event.threadID);
     }
 
-    if (event.replyTo && event.threadID) {
+    if (event && event.replyTo && event.threadID) {
       this.http.rememberMessageThread(event.replyTo, event.threadID);
     }
 
-    if (this.db && event.type === 'message') {
+    if (event && this.db && event.type === 'message') {
       this.db.saveMessage(event);
     }
     
@@ -434,9 +450,11 @@ class InstagramChatAPI extends EventEmitter {
       this.listenerCallback(null, event);
     }
     
-    this.emit('event', event);
-    if (event.type) {
-      this.emit(event.type, event);
+    if (event) {
+      this.emit('event', event);
+      if (event.type) {
+        this.emit(event.type, event);
+      }
     }
   }
 
@@ -639,12 +657,13 @@ class InstagramChatAPI extends EventEmitter {
     });
     
     if (this.auth.isAuthenticated()) {
-      const { userId } = this.auth.getCurrentUserID() || {};
+      const currentIdObj = this.auth.getCurrentUserID();
+      const userId = currentIdObj ? currentIdObj.userId : null;
       if (userId) {
         this._initMqtt(userId);
         if (this.autoListen) {
           this.listen().catch((err) => {
-            this.logger.warn('Auto-listen after session restore failed:', err.message);
+            this.logger.warn('Auto-listen after session restore failed:', err && err.message ? err.message : err);
           });
         }
       }
