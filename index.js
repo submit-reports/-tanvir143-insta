@@ -159,12 +159,19 @@ async function _login(credentials, options) {
       }
     }
   } catch (err) {
-    // Safe error normalization to prevent 'reading error' crashes on undefined objects
-    const safeMessage = (err && (err.message || err.error)) ? (err.message || err.error) : 'Unknown login error occurred';
-    const finalErr = new Error(safeMessage);
-    finalErr.error = safeMessage;
-    throw finalErr;
+  // Safe error normalization
+  let errMsg = 'Unknown Error';
+  if (err) {
+    if (typeof err === 'string') {
+      errMsg = err;
+    } else {
+      errMsg = err.message || err.error || JSON.stringify(err);
+    }
   }
+  const finalErr = new Error(errMsg);
+  finalErr.error = errMsg;
+  throw finalErr;
+}
 
   return buildApi(client);
 }
