@@ -141,7 +141,7 @@ async function _login(credentials, options) {
 
   if (isCookies) {
     const result = await client.loginWithCookies(credentials);
-    if (!result.success) throw new Error(result.error || 'Cookie login failed');
+    if (!result || !result.success) throw new Error((result && (result.error || result.message)) ? (result.error || result.message) : 'Cookie login failed');
   } else {
     const { email, username, password } = credentials;
     const result = await client.login(email || username, password);
