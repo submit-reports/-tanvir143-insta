@@ -147,8 +147,6 @@ class InstagramChatAPI extends EventEmitter {
 
   // Shared MQTT initialisation — call after any successful login
   _initMqtt(userId) {
-    // If a previous MQTT client exists, tear down its listeners to prevent leaks
-    // when re-authenticating in the same process.
     if (this.mqtt) {
       try { this.mqtt.removeAllListeners(); } catch (_) { /* ignore */ }
       try { this.mqtt.disconnect(); } catch (_) { /* ignore */ }
@@ -171,7 +169,6 @@ class InstagramChatAPI extends EventEmitter {
       http:        this.http
     });
 
-    // Bind handlers as instance refs so we can remove them deterministically.
     this._mqttEventHandler = (event) => this.handleListenEvent(event);
     this._mqttErrorHandler = (err) => {
       const errMsg = (err && err.message) ? err.message : String(err);
@@ -188,9 +185,7 @@ class InstagramChatAPI extends EventEmitter {
       if (this.listenActive) {
         try {
           this.listen();
-        } catch (_) {
-          // ignore if reconnect fails; subsequent MQTT client events will report it.
-        }
+        } catch (_) {}
       }
     });
   }
@@ -223,7 +218,6 @@ class InstagramChatAPI extends EventEmitter {
       if (callback) return callback(null, result);
       return result;
     } catch (error) {
-      // Safe error extraction to prevent undefined property crashes
       const safeError = (error && typeof error === 'object') ? error : new Error(String(error));
       if (callback) return callback(safeError);
       throw safeError;
@@ -266,7 +260,7 @@ class InstagramChatAPI extends EventEmitter {
     try {
       const result = await this.auth.loginWithCookies(cookies, options);
 
-      // Safe check ensuring result exists and has success property
+      // Fully safeguarded response check to prevent undefined property access errors
       if (result && result.success) {
         this.logger.verbose('Initializing MQTT with userId:', result.userID);
         this._initMqtt(result.userID);
@@ -288,7 +282,6 @@ class InstagramChatAPI extends EventEmitter {
           });
         }
       } else {
-        // Handle case where result is returned but success is false or undefined
         const failMsg = (result && (result.error || result.message)) ? (result.error || result.message) : 'Cookie login failed';
         const failError = new Error(failMsg);
         failError.error = failMsg;
@@ -299,7 +292,7 @@ class InstagramChatAPI extends EventEmitter {
       if (callback) return callback(null, result);
       return result;
     } catch (error) {
-      // Safe check ensuring error object doesn't cause external 'reading error' failure
+      // Safe extraction preventing undefined 'error' property reading crash
       const errorMsg = (error && error.message) ? error.message : (error && error.error) ? error.error : String(error);
       const safeError = new Error(errorMsg);
       safeError.error = errorMsg;
