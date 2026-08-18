@@ -174,15 +174,24 @@ async function _login(credentials, options) {
           errMsg = JSON.stringify(err);
         }
       }
-    } catch (e) {
-      errMsg = 'Unknown Login Error Occurred';
+    } catch (err) {
+  let errMsg = 'Unknown Error';
+  try {
+    if (err) {
+      if (typeof err === 'string') {
+        errMsg = err;
+      } else {
+        errMsg = err.message || err.error || JSON.stringify(err);
+      }
     }
-
-    const finalErr = new Error(errMsg);
-    finalErr.error = errMsg;
-    throw finalErr;
+  } catch (e) {
+    errMsg = 'Unknown Login Error';
   }
 
+  const finalErr = new Error(errMsg);
+  finalErr.error = errMsg;
+  throw finalErr;
+    }
   return buildApi(client);
 }
 
