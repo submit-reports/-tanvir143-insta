@@ -128,7 +128,7 @@ function buildApi(client) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Internal login implementation
+// Internal login implementation (Safeguarded)
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function _login(credentials, options) {
@@ -139,20 +139,31 @@ async function _login(credentials, options) {
     Array.isArray(credentials) ||
     (credentials && typeof credentials === 'object' && !credentials.password);
 
-  if (isCookies) {
-    const result = await client.loginWithCookies(credentials);
-    if (!result || !result.success) throw new Error((result && (result.error || result.message)) ? (result.error || result.message) : 'Cookie login failed');
-  } else {
-    const { email, username, password } = credentials;
-    const result = await client.login(email || username, password);
+  try {
+    if (isCookies) {
+      const result = await client.loginWithCookies(credentials);
+      if (!result || !result.success) {
+        const errorMsg = (result && (result.error || result.message)) ? (result.error || result.message) : 'Cookie login failed or returned empty response';
+        throw new Error(errorMsg);
+      }
+    } else {
+      const { email, username, password } = credentials;
+      const result = await client.login(email || username, password);
 
-    if (result.twoFactorRequired) {
-      const err = new Error('Two-factor authentication required');
-      err.twoFactorRequired  = true;
-      err.twoFactorIdentifier = result.twoFactorIdentifier;
-      err.verify = (code) => client.verifyTwoFactor(code, result.twoFactorIdentifier);
-      throw err;
+      if (result && result.twoFactorRequired) {
+        const err = new Error('Two-factor authentication required');
+        err.twoFactorRequired  = true;
+        err.twoFactorIdentifier = result.twoFactorIdentifier;
+        err.verify = (code) => client.verifyTwoFactor(code, result.twoFactorIdentifier);
+        throw err;
+      }
     }
+  } catch (err) {
+    // Safe error normalization to prevent 'reading error' crashes on undefined objects
+    const safeMessage = (err && (err.message || err.error)) ? (err.message || err.error) : 'Unknown login error occurred';
+    const finalErr = new Error(safeMessage);
+    finalErr.error = safeMessage;
+    throw finalErr;
   }
 
   return buildApi(client);
