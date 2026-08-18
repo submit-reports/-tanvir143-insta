@@ -128,7 +128,7 @@ function buildApi(client) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Internal login implementation (Safeguarded)
+// Internal login implementation (Ultra-Safe Safeguarded)
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function _login(credentials, options) {
@@ -142,13 +142,13 @@ async function _login(credentials, options) {
   try {
     if (isCookies) {
       const result = await client.loginWithCookies(credentials);
-      // এখানে ফলস চেকটি রিল্যাক্স করা হয়েছে যাতে সামান্য কারণে বট না আটকে যায়
-      if (result && result.success === false) {
+      // সেফ চেক: result এক্সিস্ট করলে এবং explicitly success: false হলে তবেই এরর থ্রো করবে
+      if (result && typeof result === 'object' && result.success === false) {
         const errorMsg = result.error || result.message || 'Cookie login failed';
         throw new Error(errorMsg);
       }
     } else {
-      const { email, username, password } = credentials;
+      const { email, username, password } = credentials || {};
       const result = await client.login(email || username, password);
 
       if (result && result.twoFactorRequired) {
@@ -160,15 +160,24 @@ async function _login(credentials, options) {
       }
     }
   } catch (err) {
-    // Safe error normalization
+    // ফুলপ্রুফ এরর নরম্যালাইজেশন যাতে কখনো প্রপার্টি রিডিং এরর না আসে
     let errMsg = 'Unknown Error';
-    if (err) {
-      if (typeof err === 'string') {
-        errMsg = err;
-      } else {
-        errMsg = err.message || err.error || JSON.stringify(err);
+    try {
+      if (err) {
+        if (typeof err === 'string') {
+          errMsg = err;
+        } else if (err.message) {
+          errMsg = err.message;
+        } else if (err.error) {
+          errMsg = err.error;
+        } else {
+          errMsg = JSON.stringify(err);
+        }
       }
+    } catch (e) {
+      errMsg = 'Unknown Login Error Occurred';
     }
+
     const finalErr = new Error(errMsg);
     finalErr.error = errMsg;
     throw finalErr;
@@ -198,14 +207,13 @@ function login(credentials, options, callback) {
   return promise;
 }
 
-// Everything a bot could need is attached directly to login,
-// so const { login } = require('@neoaz07/nkxica') is the only line ever needed.
+// Everything a bot could need is attached directly to login
 login.CookieUtils  = CookieUtils;
 login.setOptions   = setOptions;
 login.createClient = (opts) => new InstagramChatAPI(opts);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Exports — only login is exported; everything else lives on login.*
+// Exports
 // ─────────────────────────────────────────────────────────────────────────────
 
 login.login = login;
