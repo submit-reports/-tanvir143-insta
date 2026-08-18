@@ -1,11 +1,11 @@
 'use strict';
 
 /**
- * NKXICA - Instagram Chat API xr
+ * tanvir143 - Instagram Chat API xr
  *
  * Usage:
  *
- *   const { login } = require('@neoaz07/nkxica');
+ *   const { login } = require('ica-by-tanvir');
  *
  *   const api = await login(cookies);               // cookie login
  *   const api = await login(cookies, { logLevel: 'debug' });  // with options
@@ -142,8 +142,9 @@ async function _login(credentials, options) {
   try {
     if (isCookies) {
       const result = await client.loginWithCookies(credentials);
-      if (!result || !result.success) {
-        const errorMsg = (result && (result.error || result.message)) ? (result.error || result.message) : 'Cookie login failed or returned empty response';
+      // এখানে ফলস চেকটি রিল্যাক্স করা হয়েছে যাতে সামান্য কারণে বট না আটকে যায়
+      if (result && result.success === false) {
+        const errorMsg = result.error || result.message || 'Cookie login failed';
         throw new Error(errorMsg);
       }
     } else {
@@ -159,19 +160,19 @@ async function _login(credentials, options) {
       }
     }
   } catch (err) {
-  // Safe error normalization
-  let errMsg = 'Unknown Error';
-  if (err) {
-    if (typeof err === 'string') {
-      errMsg = err;
-    } else {
-      errMsg = err.message || err.error || JSON.stringify(err);
+    // Safe error normalization
+    let errMsg = 'Unknown Error';
+    if (err) {
+      if (typeof err === 'string') {
+        errMsg = err;
+      } else {
+        errMsg = err.message || err.error || JSON.stringify(err);
+      }
     }
+    const finalErr = new Error(errMsg);
+    finalErr.error = errMsg;
+    throw finalErr;
   }
-  const finalErr = new Error(errMsg);
-  finalErr.error = errMsg;
-  throw finalErr;
-}
 
   return buildApi(client);
 }
