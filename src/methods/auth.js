@@ -1,3 +1,5 @@
+'use strict';
+
 /**
  * @fileoverview NKXICA - Authentication API
  * @author neoaz07 (Saifullah Neoaz)
@@ -92,7 +94,7 @@ class Auth extends EventEmitter {
       // Try to get current user info to verify session
       try {
         const userInfoResponse = await this.http.get('https://www.instagram.com/api/v1/accounts/current_user/');
-        if (userInfoResponse.user) {
+        if (userInfoResponse && userInfoResponse.user) {
           const extracted = extractUserId(userInfoResponse.user);
           if (!extracted) {
             throw new Error('Login response contained an invalid user ID');
@@ -158,10 +160,11 @@ class Auth extends EventEmitter {
 
       throw new Error('Could not verify session with cookies');
     } catch (error) {
-  const errorMsg = error?.message || error || 'Unknown error';
-  log.error('Cookie login failed:', errorMsg);
-  if (callback) return callback(error || new Error(errorMsg));
-  throw error || new Error(errorMsg);
+      const errorMsg = error?.message || (typeof error === 'string' ? error : 'Unknown error');
+      log.error('Cookie login failed:', errorMsg);
+      const finalError = error instanceof Error ? error : new Error(errorMsg);
+      if (callback) return callback(finalError);
+      throw finalError;
     }
   }
 
@@ -205,6 +208,10 @@ class Auth extends EventEmitter {
         }
       );
 
+      if (!response) {
+        throw new Error('Empty response received from Instagram login endpoint');
+      }
+
       if (response.status === 'ok') {
         const extracted = extractUserId(response.logged_in_user);
         if (!extracted) {
@@ -237,8 +244,8 @@ class Auth extends EventEmitter {
         const result = {
           success: false,
           twoFactorRequired: true,
-          twoFactorIdentifier: response.two_factor_info.two_factor_identifier,
-          phoneNumberHint: response.two_factor_info.obfuscated_phone_number
+          twoFactorIdentifier: response.two_factor_info?.two_factor_identifier,
+          phoneNumberHint: response.two_factor_info?.obfuscated_phone_number
         };
         
         if (callback) return callback(null, result);
@@ -261,9 +268,11 @@ class Auth extends EventEmitter {
 
       throw new Error(response.message || 'Login failed');
     } catch (error) {
-      log.error('Login failed:', error.message);
-      if (callback) return callback(error);
-      throw error;
+      const errorMsg = error?.message || (typeof error === 'string' ? error : 'Unknown error');
+      log.error('Login failed:', errorMsg);
+      const finalError = error instanceof Error ? error : new Error(errorMsg);
+      if (callback) return callback(finalError);
+      throw finalError;
     }
   }
 
@@ -297,6 +306,10 @@ class Auth extends EventEmitter {
         }
       );
 
+      if (!response) {
+        throw new Error('Empty response received from 2FA endpoint');
+      }
+
       if (response.status === 'ok') {
         const extracted = extractUserId(response.logged_in_user);
         if (!extracted) {
@@ -322,9 +335,11 @@ class Auth extends EventEmitter {
 
       throw new Error(response.message || 'Two-factor verification failed');
     } catch (error) {
-      log.error('2FA verification failed:', error.message);
-      if (callback) return callback(error);
-      throw error;
+      const errorMsg = error?.message || (typeof error === 'string' ? error : 'Unknown error');
+      log.error('2FA verification failed:', errorMsg);
+      const finalError = error instanceof Error ? error : new Error(errorMsg);
+      if (callback) return callback(finalError);
+      throw finalError;
     }
   }
 
