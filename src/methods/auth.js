@@ -1,12 +1,12 @@
 'use strict';
 
 /**
- * @fileoverview NKXICA - Authentication API
+ * @fileoverview tanvir143 - Authentication API
  * @author neoaz07 (Saifullah Neoaz)
- * @copyright 2024 NeoKEX
+ * @copyright 2026 tanvir143
  * @license MIT
  * @module Auth
- * @since 1.0.0
+ * @since 1.0.1
  */
 
 const EventEmitter = require('events');
@@ -156,9 +156,10 @@ class Auth extends EventEmitter {
       const errorMsg = error && error.message ? error.message : (typeof error === 'string' ? error : 'Unknown error during cookie login');
       log.error('Cookie login failed:', errorMsg);
       
-      // Wrapping error with standard properties to prevent external destructuring crashes (reading 'error')
+      // Safe Error construction to avoid undefined property access crashes
       const finalError = new Error(errorMsg);
       finalError.error = errorMsg; 
+      finalError.success = false;
       
       if (typeof callback === 'function') return callback(finalError);
       throw finalError;
@@ -172,6 +173,7 @@ class Auth extends EventEmitter {
     if (!this.username || !this.password) {
       const error = new Error('Username and password are required');
       error.error = error.message;
+      error.success = false;
       if (typeof callback === 'function') return callback(error);
       throw error;
     }
@@ -272,6 +274,7 @@ class Auth extends EventEmitter {
       
       const finalError = new Error(errorMsg);
       finalError.error = errorMsg;
+      finalError.success = false;
       
       if (typeof callback === 'function') return callback(finalError);
       throw finalError;
@@ -343,6 +346,7 @@ class Auth extends EventEmitter {
       
       const finalError = new Error(errorMsg);
       finalError.error = errorMsg;
+      finalError.success = false;
       
       if (typeof callback === 'function') return callback(finalError);
       throw finalError;
